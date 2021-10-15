@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net5.0</TargetFramework>
+        <RootNamespace>InstagramApiSharp.GetMediaLikers</RootNamespace>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Include="InstagramApiSharp" Version="1.7.1" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="Classes\Users" />
+    </ItemGroup>
+
+</Project>
