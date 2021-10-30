@@ -1,14 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using InstagramApiSharp.API;
 using InstagramApiSharp.Classes;
 using InstagramApiSharp.Classes.Models;
+using InstagramApiSharp.GetMediaLikers.Classes;
+using InstagramApiSharp.GetMediaLikers.Classes.Follows;
+using InstagramApiSharp.GetMediaLikers.Enums;
 using InstagramApiSharp.Helpers;
 using Newtonsoft.Json;
 
@@ -129,6 +130,94 @@ namespace InstagramApiSharp.GetMediaLikers
             catch (Exception exception)
             {
                 return Result.Fail<Classes.Comments.MediaInfo>(exception);
+            }
+        }
+
+        public static async Task<IResult<Follows>> GetUserFriendshipsAsync(this IInstaApi api, string username,
+            FriendshipStatus status, int countPerPage,
+            PaginationParameters parameters, string query = "")
+        {
+            UserAuthValidator.Validate(api.GetLoggedUser(), api.IsUserAuthenticated);
+            try
+            {
+                var user = await api.UserProcessor.GetUserAsync(username);
+                if (!user.Succeeded) return Result.Fail(user.Info, default(Follows));
+                if (user.Value.FriendshipStatus.IsPrivate && user.Value.UserName != api.GetLoggedUser().UserName &&
+                    !user.Value.FriendshipStatus.Following)
+                    return Result.Fail("You must be a follower of private accounts to be able to get user's followers",
+                        default(Follows));
+
+                return await api.GetUserFriendshipsByIdAsync(user.Value.Pk, status, countPerPage, parameters, query);
+            }
+            catch (HttpRequestException httpException)
+            {
+                return Result.Fail(httpException, default(Follows), ResponseType.NetworkProblem);
+            }
+            catch (Exception exception)
+            {
+                return Result.Fail(exception, default(Follows));
+            }
+        }
+
+        public static async Task<IResult<Follows>> GetUserFriendshipsByIdAsync(this IInstaApi api, long pk,
+            FriendshipStatus status, int countPerPage,
+            PaginationParameters parameters, string query = "")
+        {
+            UserAuthValidator.Validate(api.GetLoggedUser(), api.IsUserAuthenticated);
+            try
+            {
+                parameters ??= PaginationParameters.MaxPagesToLoad(1);
+
+                string type = status switch
+                {
+                    FriendshipStatus.Followers => "followers",
+                    FriendshipStatus.Following => "following",
+                    _ => throw new ArgumentOutOfRangeException(nameof(status), status, null)
+                };
+                var list = new List<User>();
+                Follows data;
+                do
+                {
+                    var uri = new Uri($"https://i.instagram.com/api/v1/friendships/{pk}/{type}/");
+                    uri = uri.AddQueryParameterIfNotEmpty("count", countPerPage.ToString());
+                    uri = uri.AddQueryParameterIfNotEmpty("query", query);
+                    uri = uri.AddQueryParameterIfNotEmpty("max_id", parameters.NextMaxId);
+                    var result = await api.SendGetRequestAsync(uri);
+                    if (!result.Succeeded)
+                    {
+                        if (result.Info.ResponseType == ResponseType.UnExpectedResponse)
+                        {
+                            return Result.UnExpectedResponse<Follows>(
+                                new HttpResponseMessage(HttpStatusCode.OK), result.Info.Message, result.Value);
+                        }
+
+                        return Result.Fail<Follows>(result.Info.Exception, default);
+                    }
+
+                    data = JsonConvert.DeserializeObject<Follows>(result.Value);
+
+
+                    if (data.Status == "fail")
+                        return Result.UnExpectedResponse<Follows>(
+                            new HttpResponseMessage(HttpStatusCode.OK), data.Status, String.Empty);
+
+                    list.AddRange(data.Users);
+                    parameters.PagesLoaded++;
+                    parameters.NextMaxId =
+                        data.NextMaxId?.Replace("\"", "\\\"");
+                } while (!string.IsNullOrEmpty(parameters.NextMaxId)
+                         && parameters.PagesLoaded < parameters.MaximumPagesToLoad);
+
+                data.Users = list;
+                return Result.Success(data);
+            }
+            catch (HttpRequestException httpException)
+            {
+                return Result.Fail(httpException, default(Follows), ResponseType.NetworkProblem);
+            }
+            catch (Exception exception)
+            {
+                return Result.Fail(exception, default(Follows));
             }
         }
 

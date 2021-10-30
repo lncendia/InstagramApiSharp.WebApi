@@ -1,8 +1,8 @@
 ﻿using Newtonsoft.Json;
 
-namespace InstagramApiSharp.GetMediaLikers.Classes.Likes
+namespace InstagramApiSharp.GetMediaLikers.Classes
 {
-    public class Like
+    public class User
     {
         [JsonProperty("username")] public string UserName { get; set; }
 
@@ -18,5 +18,9 @@ namespace InstagramApiSharp.GetMediaLikers.Classes.Likes
         [JsonProperty("requested_by_viewer")] public bool IsRequestedByViewer { get; set; }
 
         [JsonProperty("id")] public long Pk { get; set; }
+        [JsonProperty("pk")] private long Pk2
+        {
+            set => Pk = value;
+        }
     }
 }
