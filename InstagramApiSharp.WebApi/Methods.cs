@@ -221,8 +221,8 @@ namespace InstagramApiSharp.GetMediaLikers
             PaginationParameters parameters)
         {
             UserAuthValidator.Validate(api.GetLoggedUser(), api.IsUserAuthenticated);
-            try
-            {
+            // try
+            // {
                 parameters ??= PaginationParameters.MaxPagesToLoad(1);
                 List<InstaSectionMediaResponse> list = new List<InstaSectionMediaResponse>();
                 InstaSectionMediaListResponse data;
@@ -255,16 +255,20 @@ namespace InstagramApiSharp.GetMediaLikers
                          && parameters.PagesLoaded < parameters.MaximumPagesToLoad);
 
                 data.Sections = list;
+                var x = Type.GetType("InstagramApiSharp.Converters.ConvertersFabric, InstagramApiSharp", false, true)?.GetProperty("Instance")?.GetGetMethod()?.Invoke(null, null);
+                var medias = x.GetType().GetMethod("GetHashtagMediaListConverter").Invoke(x, new[] { (object)data });
+                InstaSectionMedia media = (InstaSectionMedia)medias.GetType().GetMethod("Convert").Invoke(medias, null);
+                media.Medias.ForEach(a=>Console.WriteLine(a.Code));
                 return Result.Success(data);
-            }
-            catch (HttpRequestException httpException)
-            {
-                return Result.Fail(httpException, default(InstaSectionMediaListResponse), ResponseType.NetworkProblem);
-            }
-            catch (Exception exception)
-            {
-                return Result.Fail(exception, default(InstaSectionMediaListResponse));
-            }
+                // }
+            // catch (HttpRequestException httpException)
+            // {
+            //     return Result.Fail(httpException, default(InstaSectionMediaListResponse), ResponseType.NetworkProblem);
+            // }
+            // catch (Exception exception)
+            // {
+            //     return Result.Fail(exception, default(InstaSectionMediaListResponse));
+            // }
         }
 
         public static async Task<IResult<InstaMediaList>> GetMediaByIdsAsync(this IInstaApi api, List<string> ids)
