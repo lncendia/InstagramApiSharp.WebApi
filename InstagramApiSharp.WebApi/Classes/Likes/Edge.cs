@@ -1,9 +1,10 @@
-﻿using Newtonsoft.Json;
+﻿using InstagramApiSharp.Classes.ResponseWrappers;
+using Newtonsoft.Json;
 
 namespace InstagramApiSharp.GetMediaLikers.Classes.Likes
 {
     public class Edge
     {
-        [JsonProperty("node")] public User Like { get; set; }
+        [JsonProperty("node")] public InstaUserShortResponse Like { get; set; }
     }
 }

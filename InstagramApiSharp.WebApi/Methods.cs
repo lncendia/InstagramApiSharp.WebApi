@@ -1,14 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
 using InstagramApiSharp.API;
 using InstagramApiSharp.Classes;
 using InstagramApiSharp.Classes.Models;
-using InstagramApiSharp.GetMediaLikers.Classes;
-using InstagramApiSharp.GetMediaLikers.Classes.Follows;
+using InstagramApiSharp.Classes.ResponseWrappers;
 using InstagramApiSharp.GetMediaLikers.Enums;
 using InstagramApiSharp.Helpers;
 using Newtonsoft.Json;
@@ -38,21 +36,21 @@ namespace InstagramApiSharp.GetMediaLikers
                     var result = await api.SendGetRequestAsync(uri);
                     if (!result.Succeeded)
                     {
-                        if (result.Info.ResponseType == ResponseType.UnExpectedResponse)
+                        if (!result.Succeeded)
                         {
-                            return Result.UnExpectedResponse<Classes.Likes.MediaInfo>(
-                                new HttpResponseMessage(HttpStatusCode.OK), result.Info.Message, result.Value);
+                            return result.Info.ResponseType == ResponseType.InternalException
+                                ? Result.Fail<Classes.Likes.MediaInfo>(result.Info.Exception)
+                                : Result.Fail<Classes.Likes.MediaInfo>(result.Info.Message);
                         }
-
-                        return Result.Fail<Classes.Likes.MediaInfo>(result.Info.Exception, default);
                     }
 
-                    data = JsonConvert.DeserializeObject<Classes.Likes.Response>(result.Value);
+                    data = JsonConvert.DeserializeObject<Classes.Likes.Response>(result.Value.Replace("\"id\"", "\"pk\""));
 
 
-                    if (data.Status == "fail")
-                        return Result.UnExpectedResponse<Classes.Likes.MediaInfo>(
-                            new HttpResponseMessage(HttpStatusCode.OK), data.Message, String.Empty);
+                    if (data is not { Status: "ok" })
+                    {
+                        return Result.Fail<Classes.Likes.MediaInfo>(data?.Message ?? "Failed to deserialize the object");
+                    }
                     if (data.Info.ShortcodeMediaInfo == null)
                         return Result.Fail<Classes.Likes.MediaInfo>("Media was not found.", ResponseType.MediaNotFound,
                             default);
@@ -96,21 +94,21 @@ namespace InstagramApiSharp.GetMediaLikers
                     var result = await api.SendGetRequestAsync(uri);
                     if (!result.Succeeded)
                     {
-                        if (result.Info.ResponseType == ResponseType.UnExpectedResponse)
+                        if (!result.Succeeded)
                         {
-                            return Result.UnExpectedResponse<Classes.Comments.MediaInfo>(
-                                new HttpResponseMessage(HttpStatusCode.OK), result.Info.Message, result.Value);
+                            return result.Info.ResponseType == ResponseType.InternalException
+                                ? Result.Fail<Classes.Comments.MediaInfo>(result.Info.Exception)
+                                : Result.Fail<Classes.Comments.MediaInfo>(result.Info.Message);
                         }
-
-                        return Result.Fail<Classes.Comments.MediaInfo>(result.Info.Exception, default);
                     }
 
-                    data = JsonConvert.DeserializeObject<Classes.Comments.Response>(result.Value);
+                    data = JsonConvert.DeserializeObject<Classes.Comments.Response>(result.Value.Replace("\"id\"", "\"pk\""));
 
 
-                    if (data.Status == "fail")
-                        return Result.UnExpectedResponse<Classes.Comments.MediaInfo>(
-                            new HttpResponseMessage(HttpStatusCode.OK), data.Message, String.Empty);
+                    if (data is not { Status: "ok" })
+                    {
+                        return Result.Fail<Classes.Comments.MediaInfo>(data?.Message ?? "Failed to deserialize the object");
+                    }
                     if (data.Info.ShortcodeMediaInfo == null)
                         return Result.Fail<Classes.Comments.MediaInfo>("Media was not found.",
                             ResponseType.MediaNotFound,
@@ -133,7 +131,7 @@ namespace InstagramApiSharp.GetMediaLikers
             }
         }
 
-        public static async Task<IResult<Follows>> GetUserFriendshipsAsync(this IInstaApi api, string username,
+        public static async Task<IResult<InstaUserListShortResponse>> GetUserFriendshipsAsync(this IInstaApi api, string username,
             FriendshipStatus status, int countPerPage,
             PaginationParameters parameters, string query = "")
         {
@@ -141,25 +139,21 @@ namespace InstagramApiSharp.GetMediaLikers
             try
             {
                 var user = await api.UserProcessor.GetUserAsync(username);
-                if (!user.Succeeded) return Result.Fail(user.Info, default(Follows));
+                if (!user.Succeeded) return Result.Fail(user.Info, default(InstaUserListShortResponse));
                 if (user.Value.FriendshipStatus.IsPrivate && user.Value.UserName != api.GetLoggedUser().UserName &&
                     !user.Value.FriendshipStatus.Following)
                     return Result.Fail("You must be a follower of private accounts to be able to get user's followers",
-                        default(Follows));
+                        default(InstaUserListShortResponse));
 
                 return await api.GetUserFriendshipsByIdAsync(user.Value.Pk, status, countPerPage, parameters, query);
             }
-            catch (HttpRequestException httpException)
-            {
-                return Result.Fail(httpException, default(Follows), ResponseType.NetworkProblem);
-            }
             catch (Exception exception)
             {
-                return Result.Fail(exception, default(Follows));
+                return Result.Fail(exception, default(InstaUserListShortResponse));
             }
         }
 
-        public static async Task<IResult<Follows>> GetUserFriendshipsByIdAsync(this IInstaApi api, long pk,
+        public static async Task<IResult<InstaUserListShortResponse>> GetUserFriendshipsByIdAsync(this IInstaApi api, long pk,
             FriendshipStatus status, int countPerPage,
             PaginationParameters parameters, string query = "")
         {
@@ -174,8 +168,8 @@ namespace InstagramApiSharp.GetMediaLikers
                     FriendshipStatus.Following => "following",
                     _ => throw new ArgumentOutOfRangeException(nameof(status), status, null)
                 };
-                var list = new List<User>();
-                Follows data;
+                var list = new List<InstaUserShortResponse>();
+                InstaUserListShortResponse data;
                 do
                 {
                     var uri = new Uri($"https://i.instagram.com/api/v1/friendships/{pk}/{type}/");
@@ -185,39 +179,91 @@ namespace InstagramApiSharp.GetMediaLikers
                     var result = await api.SendGetRequestAsync(uri);
                     if (!result.Succeeded)
                     {
-                        if (result.Info.ResponseType == ResponseType.UnExpectedResponse)
+                        if (!result.Succeeded)
                         {
-                            return Result.UnExpectedResponse<Follows>(
-                                new HttpResponseMessage(HttpStatusCode.OK), result.Info.Message, result.Value);
+                            return result.Info.ResponseType == ResponseType.InternalException
+                                ? Result.Fail<InstaUserListShortResponse>(result.Info.Exception)
+                                : Result.Fail<InstaUserListShortResponse>(result.Info.Message);
                         }
-
-                        return Result.Fail<Follows>(result.Info.Exception, default);
                     }
 
-                    data = JsonConvert.DeserializeObject<Follows>(result.Value);
+                    data = JsonConvert.DeserializeObject<InstaUserListShortResponse>(result.Value);
 
 
-                    if (data.Status == "fail")
-                        return Result.UnExpectedResponse<Follows>(
-                            new HttpResponseMessage(HttpStatusCode.OK), data.Status, String.Empty);
+                    if (data is not { Status: "ok" })
+                    {
+                        return Result.UnExpectedResponse<InstaUserListShortResponse>(new HttpResponseMessage(),
+                            result.Value);
+                    }
 
-                    list.AddRange(data.Users);
+                    list.AddRange(data.Items);
                     parameters.PagesLoaded++;
                     parameters.NextMaxId =
                         data.NextMaxId?.Replace("\"", "\\\"");
                 } while (!string.IsNullOrEmpty(parameters.NextMaxId)
                          && parameters.PagesLoaded < parameters.MaximumPagesToLoad);
 
-                data.Users = list;
+                data.Items = list;
                 return Result.Success(data);
             }
             catch (HttpRequestException httpException)
             {
-                return Result.Fail(httpException, default(Follows), ResponseType.NetworkProblem);
+                return Result.Fail(httpException, default(InstaUserListShortResponse), ResponseType.NetworkProblem);
             }
             catch (Exception exception)
             {
-                return Result.Fail(exception, default(Follows));
+                return Result.Fail(exception, default(InstaUserListShortResponse));
+            }
+        }
+
+        public static async Task<IResult<InstaSectionMediaListResponse>> GetReelsHashtagMediaListAsync(this IInstaApi api,
+            string tag,
+            PaginationParameters parameters)
+        {
+            UserAuthValidator.Validate(api.GetLoggedUser(), api.IsUserAuthenticated);
+            try
+            {
+                parameters ??= PaginationParameters.MaxPagesToLoad(1);
+                List<InstaSectionMediaResponse> list = new List<InstaSectionMediaResponse>();
+                InstaSectionMediaListResponse data;
+                do
+                {
+                    var uri = new Uri($"https://i.instagram.com/api/v1/tags/{tag}/sections/");
+                    Dictionary<string, string> dictionary = new Dictionary<string, string>
+                    {
+                        { "include_persistent", "false" },
+                        { "tab", "clips" }
+                    };
+                    var result = await api.SendPostRequestAsync(uri, dictionary);
+                    if (!result.Succeeded)
+                    {
+                        return result.Info.ResponseType == ResponseType.InternalException
+                            ? Result.Fail<InstaSectionMediaListResponse>(result.Info.Exception)
+                            : Result.Fail<InstaSectionMediaListResponse>(result.Info.Message);
+                    }
+
+                    data = JsonConvert.DeserializeObject<InstaSectionMediaListResponse>(result.Value);
+                    if (data is not { Status: "ok" })
+                    {
+                        return Result.UnExpectedResponse<InstaSectionMediaListResponse>(new HttpResponseMessage(),
+                            result.Value);
+                    }
+                    list.AddRange(data.Sections);
+                    parameters.PagesLoaded++;
+                    parameters.NextMaxId = data.NextMaxId;
+                } while (!string.IsNullOrEmpty(parameters.NextMaxId)
+                         && parameters.PagesLoaded < parameters.MaximumPagesToLoad);
+
+                data.Sections = list;
+                return Result.Success(data);
+            }
+            catch (HttpRequestException httpException)
+            {
+                return Result.Fail(httpException, default(InstaSectionMediaListResponse), ResponseType.NetworkProblem);
+            }
+            catch (Exception exception)
+            {
+                return Result.Fail(exception, default(InstaSectionMediaListResponse));
             }
         }
 

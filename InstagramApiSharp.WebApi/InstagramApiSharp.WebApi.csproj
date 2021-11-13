@@ -9,8 +9,4 @@
       <PackageReference Include="InstagramApiSharp" Version="1.7.1" />
     </ItemGroup>
 
-    <ItemGroup>
-      <Folder Include="Classes\Users" />
-    </ItemGroup>
-
 </Project>
