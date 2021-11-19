@@ -1,7 +1,7 @@
 ﻿using InstagramApiSharp.Classes.ResponseWrappers;
 using Newtonsoft.Json;
 
-namespace InstagramApiSharp.GetMediaLikers.Classes.Likes
+namespace InstagramApiSharp.WebApi.Classes.Likes
 {
     public class Edge
     {

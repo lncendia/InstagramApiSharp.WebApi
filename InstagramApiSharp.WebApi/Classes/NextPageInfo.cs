@@ -1,6 +1,6 @@
 ﻿using Newtonsoft.Json;
 
-namespace InstagramApiSharp.GetMediaLikers.Classes
+namespace InstagramApiSharp.WebApi.Classes
 {
     public class NextPageInfo
     {

@@ -1,9 +1,8 @@
-﻿using System;
-using InstagramApiSharp.Classes.ResponseWrappers;
-using InstagramApiSharp.GetMediaLikers.Classes.Likes;
+﻿using InstagramApiSharp.Classes.ResponseWrappers;
+using InstagramApiSharp.WebApi.Classes.Likes;
 using Newtonsoft.Json;
 
-namespace InstagramApiSharp.GetMediaLikers.Classes.Comments
+namespace InstagramApiSharp.WebApi.Classes.Comments
 {
     public class Comment
     {

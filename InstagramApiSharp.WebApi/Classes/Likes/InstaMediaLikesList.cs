@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
 using Newtonsoft.Json;
 
-namespace InstagramApiSharp.GetMediaLikers.Classes.Likes
+namespace InstagramApiSharp.WebApi.Classes.Likes
 {
     public class InstaMediaLikesList
     {

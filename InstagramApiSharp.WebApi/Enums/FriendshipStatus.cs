@@ -1,4 +1,4 @@
-﻿namespace InstagramApiSharp.GetMediaLikers.Enums
+﻿namespace InstagramApiSharp.WebApi.Enums
 {
     public enum FriendshipStatus
     {

@@ -1,6 +1,6 @@
 ﻿using Newtonsoft.Json;
 
-namespace InstagramApiSharp.GetMediaLikers.Classes.Comments
+namespace InstagramApiSharp.WebApi.Classes.Comments
 {
     [JsonObject(MemberSerialization.OptIn)]
     public class Response

@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
 using Newtonsoft.Json;
 
-namespace InstagramApiSharp.GetMediaLikers.Classes.Comments
+namespace InstagramApiSharp.WebApi.Classes.Comments
 {
     public class InstaMediaCommentsList
     {

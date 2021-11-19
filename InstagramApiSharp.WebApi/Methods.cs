@@ -7,15 +7,15 @@ using InstagramApiSharp.API;
 using InstagramApiSharp.Classes;
 using InstagramApiSharp.Classes.Models;
 using InstagramApiSharp.Classes.ResponseWrappers;
-using InstagramApiSharp.GetMediaLikers.Enums;
 using InstagramApiSharp.Helpers;
+using InstagramApiSharp.WebApi.Enums;
 using Newtonsoft.Json;
 
-namespace InstagramApiSharp.GetMediaLikers
+namespace InstagramApiSharp.WebApi
 {
-    public static class GetMediaLikers
+    public static class WebApi
     {
-        public static async Task<IResult<Classes.Likes.MediaInfo>> GetMediaLikesAsync(this IInstaApi api, string code,
+        public static async Task<IResult<Classes.Likes.MediaInfo>> GetMediaLikesAsync(this IInstaApi api, string  code,
             PaginationParameters parameters)
         {
             UserAuthValidator.Validate(api.GetLoggedUser(), api.IsUserAuthenticated);
@@ -44,13 +44,16 @@ namespace InstagramApiSharp.GetMediaLikers
                         }
                     }
 
-                    data = JsonConvert.DeserializeObject<Classes.Likes.Response>(result.Value.Replace("\"id\"", "\"pk\""));
+                    data = JsonConvert.DeserializeObject<Classes.Likes.Response>(
+                        result.Value.Replace("\"id\"", "\"pk\""));
 
 
-                    if (data is not { Status: "ok" })
+                    if (data is not {Status: "ok"})
                     {
-                        return Result.Fail<Classes.Likes.MediaInfo>(data?.Message ?? "Failed to deserialize the object");
+                        return Result.Fail<Classes.Likes.MediaInfo>(data?.Message ??
+                                                                    "Failed to deserialize the object");
                     }
+
                     if (data.Info.ShortcodeMediaInfo == null)
                         return Result.Fail<Classes.Likes.MediaInfo>("Media was not found.", ResponseType.MediaNotFound,
                             default);
@@ -60,7 +63,7 @@ namespace InstagramApiSharp.GetMediaLikers
                     parameters.PagesLoaded++;
                     parameters.NextMaxId = data.Info.ShortcodeMediaInfo.Likes.NextPageInfo.NextMaxId;
                 } while (!string.IsNullOrEmpty(parameters.NextMaxId)
-                         && parameters.PagesLoaded < parameters.MaximumPagesToLoad);
+                         && parameters.PagesLoaded <= parameters.MaximumPagesToLoad);
 
                 data.Info.ShortcodeMediaInfo.Likes.Edges = list;
                 return Result.Success(data.Info.ShortcodeMediaInfo);
@@ -102,13 +105,16 @@ namespace InstagramApiSharp.GetMediaLikers
                         }
                     }
 
-                    data = JsonConvert.DeserializeObject<Classes.Comments.Response>(result.Value.Replace("\"id\"", "\"pk\""));
+                    data = JsonConvert.DeserializeObject<Classes.Comments.Response>(
+                        result.Value.Replace("\"id\"", "\"pk\""));
 
 
-                    if (data is not { Status: "ok" })
+                    if (data is not {Status: "ok"})
                     {
-                        return Result.Fail<Classes.Comments.MediaInfo>(data?.Message ?? "Failed to deserialize the object");
+                        return Result.Fail<Classes.Comments.MediaInfo>(data?.Message ??
+                                                                       "Failed to deserialize the object");
                     }
+
                     if (data.Info.ShortcodeMediaInfo == null)
                         return Result.Fail<Classes.Comments.MediaInfo>("Media was not found.",
                             ResponseType.MediaNotFound,
@@ -120,7 +126,7 @@ namespace InstagramApiSharp.GetMediaLikers
                     parameters.NextMaxId =
                         data.Info.ShortcodeMediaInfo.Comments.NextPageInfo.NextMaxId?.Replace("\"", "\\\"");
                 } while (!string.IsNullOrEmpty(parameters.NextMaxId)
-                         && parameters.PagesLoaded < parameters.MaximumPagesToLoad);
+                         && parameters.PagesLoaded <= parameters.MaximumPagesToLoad);
 
                 data.Info.ShortcodeMediaInfo.Comments.Edges = list;
                 return Result.Success(data.Info.ShortcodeMediaInfo);
@@ -131,7 +137,8 @@ namespace InstagramApiSharp.GetMediaLikers
             }
         }
 
-        public static async Task<IResult<InstaUserListShortResponse>> GetUserFriendshipsAsync(this IInstaApi api, string username,
+        public static async Task<IResult<InstaUserShortList>> GetUserFriendshipsAsync(this IInstaApi api,
+            string username,
             FriendshipStatus status, int countPerPage,
             PaginationParameters parameters, string query = "")
         {
@@ -139,21 +146,22 @@ namespace InstagramApiSharp.GetMediaLikers
             try
             {
                 var user = await api.UserProcessor.GetUserAsync(username);
-                if (!user.Succeeded) return Result.Fail(user.Info, default(InstaUserListShortResponse));
+                if (!user.Succeeded) return Result.Fail(user.Info, default(InstaUserShortList));
                 if (user.Value.FriendshipStatus.IsPrivate && user.Value.UserName != api.GetLoggedUser().UserName &&
                     !user.Value.FriendshipStatus.Following)
                     return Result.Fail("You must be a follower of private accounts to be able to get user's followers",
-                        default(InstaUserListShortResponse));
+                        default(InstaUserShortList));
 
                 return await api.GetUserFriendshipsByIdAsync(user.Value.Pk, status, countPerPage, parameters, query);
             }
             catch (Exception exception)
             {
-                return Result.Fail(exception, default(InstaUserListShortResponse));
+                return Result.Fail(exception, default(InstaUserShortList));
             }
         }
 
-        public static async Task<IResult<InstaUserListShortResponse>> GetUserFriendshipsByIdAsync(this IInstaApi api, long pk,
+        public static async Task<IResult<InstaUserShortList>> GetUserFriendshipsByIdAsync(this IInstaApi api,
+            long pk,
             FriendshipStatus status, int countPerPage,
             PaginationParameters parameters, string query = "")
         {
@@ -161,15 +169,19 @@ namespace InstagramApiSharp.GetMediaLikers
             try
             {
                 parameters ??= PaginationParameters.MaxPagesToLoad(1);
-
                 string type = status switch
                 {
                     FriendshipStatus.Followers => "followers",
                     FriendshipStatus.Following => "following",
                     _ => throw new ArgumentOutOfRangeException(nameof(status), status, null)
                 };
-                var list = new List<InstaUserShortResponse>();
-                InstaUserListShortResponse data;
+                var list = new InstaUserShortList();
+                var fabric = Type.GetType("InstagramApiSharp.Converters.ConvertersFabric, InstagramApiSharp", true,
+                        true)
+                    .GetProperty("Instance")
+                    ?.GetGetMethod()
+                    ?.Invoke(null, null);
+                if (fabric == null) throw new Exception("Failed to get a converters fabric.");
                 do
                 {
                     var uri = new Uri($"https://i.instagram.com/api/v1/friendships/{pk}/{type}/");
@@ -182,41 +194,46 @@ namespace InstagramApiSharp.GetMediaLikers
                         if (!result.Succeeded)
                         {
                             return result.Info.ResponseType == ResponseType.InternalException
-                                ? Result.Fail<InstaUserListShortResponse>(result.Info.Exception)
-                                : Result.Fail<InstaUserListShortResponse>(result.Info.Message);
+                                ? Result.Fail<InstaUserShortList>(result.Info.Exception)
+                                : Result.Fail<InstaUserShortList>(result.Info.Message);
                         }
                     }
 
-                    data = JsonConvert.DeserializeObject<InstaUserListShortResponse>(result.Value);
+                    var data = JsonConvert.DeserializeObject<InstaUserListShortResponse>(result.Value);
 
 
-                    if (data is not { Status: "ok" })
+                    if (data is not {Status: "ok"})
                     {
-                        return Result.UnExpectedResponse<InstaUserListShortResponse>(new HttpResponseMessage(),
+                        return Result.UnExpectedResponse<InstaUserShortList>(new HttpResponseMessage(),
                             result.Value);
                     }
 
-                    list.AddRange(data.Items);
+                    list.AddRange(data.Items.Select(item =>
+                    {
+                        var medias = fabric.GetType()
+                            .GetMethod("GetUserShortConverter")?.Invoke(fabric, new[] {(object) item});
+                        if (medias == null) throw new Exception("Failed to get a converter.");
+                        return (InstaUserShort) medias.GetType().GetMethod("Convert")?.Invoke(medias, null);
+                    }));
                     parameters.PagesLoaded++;
                     parameters.NextMaxId =
                         data.NextMaxId?.Replace("\"", "\\\"");
                 } while (!string.IsNullOrEmpty(parameters.NextMaxId)
-                         && parameters.PagesLoaded < parameters.MaximumPagesToLoad);
+                         && parameters.PagesLoaded <= parameters.MaximumPagesToLoad);
 
-                data.Items = list;
-                return Result.Success(data);
+                return Result.Success(list);
             }
             catch (HttpRequestException httpException)
             {
-                return Result.Fail(httpException, default(InstaUserListShortResponse), ResponseType.NetworkProblem);
+                return Result.Fail(httpException, default(InstaUserShortList), ResponseType.NetworkProblem);
             }
             catch (Exception exception)
             {
-                return Result.Fail(exception, default(InstaUserListShortResponse));
+                return Result.Fail(exception, default(InstaUserShortList));
             }
         }
 
-        public static async Task<IResult<InstaSectionMediaListResponse>> GetReelsHashtagMediaListAsync(this IInstaApi api,
+        public static async Task<IResult<InstaSectionMedia>> GetReelsHashtagMediaListAsync(this IInstaApi api,
             string tag,
             PaginationParameters parameters)
         {
@@ -231,39 +248,55 @@ namespace InstagramApiSharp.GetMediaLikers
                     var uri = new Uri($"https://i.instagram.com/api/v1/tags/{tag}/sections/");
                     Dictionary<string, string> dictionary = new Dictionary<string, string>
                     {
-                        { "include_persistent", "false" },
-                        { "tab", "clips" }
+                        {"include_persistent", "false"},
+                        {"tab", "clips"}
                     };
+                    if (!String.IsNullOrEmpty(parameters.NextMaxId)) dictionary.Add("max_id", parameters.NextMaxId);
+                    if (parameters.NextMediaIds != null) dictionary.Add("next_media_ids", JsonConvert.SerializeObject(parameters.NextMediaIds));
                     var result = await api.SendPostRequestAsync(uri, dictionary);
                     if (!result.Succeeded)
                     {
                         return result.Info.ResponseType == ResponseType.InternalException
-                            ? Result.Fail<InstaSectionMediaListResponse>(result.Info.Exception)
-                            : Result.Fail<InstaSectionMediaListResponse>(result.Info.Message);
+                            ? Result.Fail<InstaSectionMedia>(result.Info.Exception)
+                            : Result.Fail<InstaSectionMedia>(result.Info.Message);
                     }
 
                     data = JsonConvert.DeserializeObject<InstaSectionMediaListResponse>(result.Value);
-                    if (data is not { Status: "ok" })
+                    if (data is not {Status: "ok"})
                     {
-                        return Result.UnExpectedResponse<InstaSectionMediaListResponse>(new HttpResponseMessage(),
+                        return Result.UnExpectedResponse<InstaSectionMedia>(new HttpResponseMessage(),
                             result.Value);
                     }
+
                     list.AddRange(data.Sections);
+                    parameters.NextMediaIds = data.NextMediaIds;
                     parameters.PagesLoaded++;
                     parameters.NextMaxId = data.NextMaxId;
+                    parameters.NextPage = data.NextPage;
                 } while (!string.IsNullOrEmpty(parameters.NextMaxId)
-                         && parameters.PagesLoaded < parameters.MaximumPagesToLoad);
+                         && parameters.PagesLoaded <= parameters.MaximumPagesToLoad);
 
                 data.Sections = list;
-                return Result.Success(data);
+                var fabric = Type.GetType("InstagramApiSharp.Converters.ConvertersFabric, InstagramApiSharp", true,
+                        true)
+                    .GetProperty("Instance")
+                    ?.GetGetMethod()
+                    ?.Invoke(null, null);
+                if (fabric == null) throw new Exception("Failed to get a converters fabric.");
+                var medias = fabric.GetType().GetMethod("GetHashtagMediaListConverter")
+                    ?.Invoke(fabric, new[] {(object) data});
+                if (medias == null) throw new Exception("Failed to get a converter.");
+                InstaSectionMedia media =
+                    (InstaSectionMedia) medias.GetType().GetMethod("Convert")?.Invoke(medias, null);
+                return Result.Success(media);
             }
             catch (HttpRequestException httpException)
             {
-                return Result.Fail(httpException, default(InstaSectionMediaListResponse), ResponseType.NetworkProblem);
+                return Result.Fail(httpException, default(InstaSectionMedia), ResponseType.NetworkProblem);
             }
             catch (Exception exception)
             {
-                return Result.Fail(exception, default(InstaSectionMediaListResponse));
+                return Result.Fail(exception, default(InstaSectionMedia));
             }
         }
 
