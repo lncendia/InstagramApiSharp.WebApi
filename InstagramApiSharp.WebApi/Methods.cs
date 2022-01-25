@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 using InstagramApiSharp.API;
 using InstagramApiSharp.Classes;
@@ -15,8 +16,8 @@ namespace InstagramApiSharp.WebApi
 {
     public static class WebApi
     {
-        public static async Task<IResult<Classes.Likes.MediaInfo>> GetMediaLikesAsync(this IInstaApi api, string  code,
-            PaginationParameters parameters)
+        public static async Task<IResult<Classes.Likes.MediaInfo>> GetMediaLikesAsync(this IInstaApi api, string code,
+            PaginationParameters parameters, CancellationToken token)
         {
             UserAuthValidator.Validate(api.GetLoggedUser(), api.IsUserAuthenticated);
             try
@@ -62,6 +63,7 @@ namespace InstagramApiSharp.WebApi
                     list.AddRange(data.Info.ShortcodeMediaInfo.Likes.Edges);
                     parameters.PagesLoaded++;
                     parameters.NextMaxId = data.Info.ShortcodeMediaInfo.Likes.NextPageInfo.NextMaxId;
+                    if (token.IsCancellationRequested) return Result.Success(data.Info.ShortcodeMediaInfo);
                 } while (!string.IsNullOrEmpty(parameters.NextMaxId)
                          && parameters.PagesLoaded <= parameters.MaximumPagesToLoad);
 
@@ -77,7 +79,7 @@ namespace InstagramApiSharp.WebApi
 
         public static async Task<IResult<Classes.Comments.MediaInfo>> GetMediaCommentsAsync(this IInstaApi api,
             string code,
-            PaginationParameters parameters)
+            PaginationParameters parameters, CancellationToken token)
         {
             UserAuthValidator.Validate(api.GetLoggedUser(), api.IsUserAuthenticated);
             try
@@ -108,7 +110,6 @@ namespace InstagramApiSharp.WebApi
                     data = JsonConvert.DeserializeObject<Classes.Comments.Response>(
                         result.Value.Replace("\"id\"", "\"pk\""));
 
-
                     if (data is not {Status: "ok"})
                     {
                         return Result.Fail<Classes.Comments.MediaInfo>(data?.Message ??
@@ -125,6 +126,8 @@ namespace InstagramApiSharp.WebApi
                     parameters.PagesLoaded++;
                     parameters.NextMaxId =
                         data.Info.ShortcodeMediaInfo.Comments.NextPageInfo.NextMaxId?.Replace("\"", "\\\"");
+
+                    if (token.IsCancellationRequested) return Result.Success(data.Info.ShortcodeMediaInfo);
                 } while (!string.IsNullOrEmpty(parameters.NextMaxId)
                          && parameters.PagesLoaded <= parameters.MaximumPagesToLoad);
 
@@ -138,9 +141,8 @@ namespace InstagramApiSharp.WebApi
         }
 
         public static async Task<IResult<InstaUserShortList>> GetUserFriendshipsAsync(this IInstaApi api,
-            string username,
-            FriendshipStatus status, int countPerPage,
-            PaginationParameters parameters, string query = "")
+            string username, FriendshipStatus status, int countPerPage,
+            PaginationParameters parameters, CancellationToken token, string query = "")
         {
             UserAuthValidator.Validate(api.GetLoggedUser(), api.IsUserAuthenticated);
             try
@@ -152,7 +154,8 @@ namespace InstagramApiSharp.WebApi
                     return Result.Fail("You must be a follower of private accounts to be able to get user's followers",
                         default(InstaUserShortList));
 
-                return await api.GetUserFriendshipsByIdAsync(user.Value.Pk, status, countPerPage, parameters, query);
+                return await api.GetUserFriendshipsByIdAsync(user.Value.Pk, status, countPerPage, parameters, token,
+                    query);
             }
             catch (Exception exception)
             {
@@ -160,10 +163,9 @@ namespace InstagramApiSharp.WebApi
             }
         }
 
-        public static async Task<IResult<InstaUserShortList>> GetUserFriendshipsByIdAsync(this IInstaApi api,
-            long pk,
-            FriendshipStatus status, int countPerPage,
-            PaginationParameters parameters, string query = "")
+        public static async Task<IResult<InstaUserShortList>> GetUserFriendshipsByIdAsync(this IInstaApi api, long pk,
+            FriendshipStatus status, int countPerPage, PaginationParameters parameters, CancellationToken token,
+            string query = "")
         {
             UserAuthValidator.Validate(api.GetLoggedUser(), api.IsUserAuthenticated);
             try
@@ -184,6 +186,7 @@ namespace InstagramApiSharp.WebApi
                 if (fabric == null) throw new Exception("Failed to get a converters fabric.");
                 do
                 {
+                    if (token.IsCancellationRequested) return Result.Success(list);
                     var uri = new Uri($"https://i.instagram.com/api/v1/friendships/{pk}/{type}/");
                     uri = uri.AddQueryParameterIfNotEmpty("count", countPerPage.ToString());
                     uri = uri.AddQueryParameterIfNotEmpty("query", query);
@@ -234,17 +237,17 @@ namespace InstagramApiSharp.WebApi
         }
 
         public static async Task<IResult<InstaSectionMedia>> GetReelsHashtagMediaListAsync(this IInstaApi api,
-            string tag,
-            PaginationParameters parameters)
+            string tag, PaginationParameters parameters, CancellationToken token)
         {
             UserAuthValidator.Validate(api.GetLoggedUser(), api.IsUserAuthenticated);
             try
             {
                 parameters ??= PaginationParameters.MaxPagesToLoad(1);
                 List<InstaSectionMediaResponse> list = new List<InstaSectionMediaResponse>();
-                InstaSectionMediaListResponse data;
+                InstaSectionMediaListResponse data = null;
                 do
                 {
+                    if (token.IsCancellationRequested) return Result.Success(new InstaSectionMedia());
                     var uri = new Uri($"https://i.instagram.com/api/v1/tags/{tag}/sections/");
                     Dictionary<string, string> dictionary = new Dictionary<string, string>
                     {
@@ -252,7 +255,8 @@ namespace InstagramApiSharp.WebApi
                         {"tab", "clips"}
                     };
                     if (!String.IsNullOrEmpty(parameters.NextMaxId)) dictionary.Add("max_id", parameters.NextMaxId);
-                    if (parameters.NextMediaIds != null) dictionary.Add("next_media_ids", JsonConvert.SerializeObject(parameters.NextMediaIds));
+                    if (parameters.NextMediaIds != null)
+                        dictionary.Add("next_media_ids", JsonConvert.SerializeObject(parameters.NextMediaIds));
                     var result = await api.SendPostRequestAsync(uri, dictionary);
                     if (!result.Succeeded)
                     {
@@ -300,12 +304,14 @@ namespace InstagramApiSharp.WebApi
             }
         }
 
-        public static async Task<IResult<InstaMediaList>> GetMediaByIdsAsync(this IInstaApi api, List<string> ids)
+        public static async Task<IResult<InstaMediaList>> GetMediaByIdsAsync(this IInstaApi api, List<string> ids,
+            CancellationToken token)
         {
             IResult<InstaMediaList> finalResult = null;
             for (int i = 0; i < ids.Count; i += 100)
             {
                 var result = await api.MediaProcessor.GetMediaByIdsAsync(ids.Skip(i).Take(100).ToArray());
+                if (token.IsCancellationRequested) return finalResult;
                 if (!result.Succeeded) return result;
                 if (finalResult != null)
                 {
