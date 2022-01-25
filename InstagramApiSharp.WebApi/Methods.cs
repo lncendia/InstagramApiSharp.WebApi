@@ -27,6 +27,7 @@ namespace InstagramApiSharp.WebApi
                 Classes.Likes.Response data;
                 do
                 {
+                    token.ThrowIfCancellationRequested();
                     var uri = new Uri("https://www.instagram.com/graphql/query");
                     uri = uri.AddQueryParameterIfNotEmpty("query_hash", "d5d763b1e2acf209d62d22d184488e57");
                     string variables = $"{{\"shortcode\":\"{code}\",\"first\":50";
@@ -63,7 +64,6 @@ namespace InstagramApiSharp.WebApi
                     list.AddRange(data.Info.ShortcodeMediaInfo.Likes.Edges);
                     parameters.PagesLoaded++;
                     parameters.NextMaxId = data.Info.ShortcodeMediaInfo.Likes.NextPageInfo.NextMaxId;
-                    if (token.IsCancellationRequested) return Result.Success(data.Info.ShortcodeMediaInfo);
                 } while (!string.IsNullOrEmpty(parameters.NextMaxId)
                          && parameters.PagesLoaded <= parameters.MaximumPagesToLoad);
 
@@ -89,6 +89,7 @@ namespace InstagramApiSharp.WebApi
                 Classes.Comments.Response data;
                 do
                 {
+                    token.ThrowIfCancellationRequested();
                     var uri = new Uri("https://www.instagram.com/graphql/query");
                     uri = uri.AddQueryParameterIfNotEmpty("query_hash", "bc3296d1ce80a24b1b6e40b1e72903f5");
                     string variables = $"{{\"shortcode\":\"{code}\",\"first\":50";
@@ -126,8 +127,6 @@ namespace InstagramApiSharp.WebApi
                     parameters.PagesLoaded++;
                     parameters.NextMaxId =
                         data.Info.ShortcodeMediaInfo.Comments.NextPageInfo.NextMaxId?.Replace("\"", "\\\"");
-
-                    if (token.IsCancellationRequested) return Result.Success(data.Info.ShortcodeMediaInfo);
                 } while (!string.IsNullOrEmpty(parameters.NextMaxId)
                          && parameters.PagesLoaded <= parameters.MaximumPagesToLoad);
 
@@ -186,7 +185,7 @@ namespace InstagramApiSharp.WebApi
                 if (fabric == null) throw new Exception("Failed to get a converters fabric.");
                 do
                 {
-                    if (token.IsCancellationRequested) return Result.Success(list);
+                    token.ThrowIfCancellationRequested();
                     var uri = new Uri($"https://i.instagram.com/api/v1/friendships/{pk}/{type}/");
                     uri = uri.AddQueryParameterIfNotEmpty("count", countPerPage.ToString());
                     uri = uri.AddQueryParameterIfNotEmpty("query", query);
@@ -244,10 +243,10 @@ namespace InstagramApiSharp.WebApi
             {
                 parameters ??= PaginationParameters.MaxPagesToLoad(1);
                 List<InstaSectionMediaResponse> list = new List<InstaSectionMediaResponse>();
-                InstaSectionMediaListResponse data = null;
+                InstaSectionMediaListResponse data;
                 do
                 {
-                    if (token.IsCancellationRequested) return Result.Success(new InstaSectionMedia());
+                    token.ThrowIfCancellationRequested();
                     var uri = new Uri($"https://i.instagram.com/api/v1/tags/{tag}/sections/");
                     Dictionary<string, string> dictionary = new Dictionary<string, string>
                     {
@@ -310,8 +309,8 @@ namespace InstagramApiSharp.WebApi
             IResult<InstaMediaList> finalResult = null;
             for (int i = 0; i < ids.Count; i += 100)
             {
+                token.ThrowIfCancellationRequested();
                 var result = await api.MediaProcessor.GetMediaByIdsAsync(ids.Skip(i).Take(100).ToArray());
-                if (token.IsCancellationRequested) return finalResult;
                 if (!result.Succeeded) return result;
                 if (finalResult != null)
                 {
