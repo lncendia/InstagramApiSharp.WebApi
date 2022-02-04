@@ -302,6 +302,74 @@ namespace InstagramApiSharp.WebApi
                 return Result.Fail(exception, default(InstaSectionMedia));
             }
         }
+        
+         public static async Task<IResult<InstaSectionMedia>> GetRecentHashtagMediaListAsync(this IInstaApi api,
+            string tag, PaginationParameters parameters, CancellationToken token)
+        {
+            UserAuthValidator.Validate(api.GetLoggedUser(), api.IsUserAuthenticated);
+            try
+            {
+                parameters ??= PaginationParameters.MaxPagesToLoad(1);
+                List<InstaSectionMediaResponse> list = new List<InstaSectionMediaResponse>();
+                InstaSectionMediaListResponse data;
+                do
+                {
+                    token.ThrowIfCancellationRequested();
+                    var uri = new Uri($"https://i.instagram.com/api/v1/tags/{tag}/sections/");
+                    Dictionary<string, string> dictionary = new Dictionary<string, string>
+                    {
+                        {"include_persistent", "false"},
+                        {"tab", "recent"}
+                    };
+                    if (!String.IsNullOrEmpty(parameters.NextMaxId)) dictionary.Add("max_id", parameters.NextMaxId);
+                    if (parameters.NextMediaIds != null)
+                        dictionary.Add("next_media_ids", JsonConvert.SerializeObject(parameters.NextMediaIds));
+                    var result = await api.SendPostRequestAsync(uri, dictionary);
+                    if (!result.Succeeded)
+                    {
+                        return result.Info.ResponseType == ResponseType.InternalException
+                            ? Result.Fail<InstaSectionMedia>(result.Info.Exception)
+                            : Result.Fail<InstaSectionMedia>(result.Info.Message);
+                    }
+
+                    data = JsonConvert.DeserializeObject<InstaSectionMediaListResponse>(result.Value);
+                    if (data is not {Status: "ok"})
+                    {
+                        return Result.UnExpectedResponse<InstaSectionMedia>(new HttpResponseMessage(),
+                            result.Value);
+                    }
+
+                    list.AddRange(data.Sections);
+                    parameters.NextMediaIds = data.NextMediaIds;
+                    parameters.PagesLoaded++;
+                    parameters.NextMaxId = data.NextMaxId;
+                    parameters.NextPage = data.NextPage;
+                } while (!string.IsNullOrEmpty(parameters.NextMaxId)
+                         && parameters.PagesLoaded <= parameters.MaximumPagesToLoad);
+
+                data.Sections = list;
+                var fabric = Type.GetType("InstagramApiSharp.Converters.ConvertersFabric, InstagramApiSharp", true,
+                        true)
+                    .GetProperty("Instance")
+                    ?.GetGetMethod()
+                    ?.Invoke(null, null);
+                if (fabric == null) throw new Exception("Failed to get a converters fabric.");
+                var medias = fabric.GetType().GetMethod("GetHashtagMediaListConverter")
+                    ?.Invoke(fabric, new[] {(object) data});
+                if (medias == null) throw new Exception("Failed to get a converter.");
+                InstaSectionMedia media =
+                    (InstaSectionMedia) medias.GetType().GetMethod("Convert")?.Invoke(medias, null);
+                return Result.Success(media);
+            }
+            catch (HttpRequestException httpException)
+            {
+                return Result.Fail(httpException, default(InstaSectionMedia), ResponseType.NetworkProblem);
+            }
+            catch (Exception exception)
+            {
+                return Result.Fail(exception, default(InstaSectionMedia));
+            }
+        }
 
         public static async Task<IResult<InstaMediaList>> GetMediaByIdsAsync(this IInstaApi api, List<string> ids,
             CancellationToken token)
