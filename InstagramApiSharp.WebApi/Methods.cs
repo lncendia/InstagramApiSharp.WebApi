@@ -70,6 +70,10 @@ namespace InstagramApiSharp.WebApi
                 data.Info.ShortcodeMediaInfo.Likes.Edges = list;
                 return Result.Success(data.Info.ShortcodeMediaInfo);
             }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
             catch (Exception exception)
             {
                 return Result.Fail<Classes.Likes.MediaInfo>(exception);
@@ -133,6 +137,10 @@ namespace InstagramApiSharp.WebApi
                 data.Info.ShortcodeMediaInfo.Comments.Edges = list;
                 return Result.Success(data.Info.ShortcodeMediaInfo);
             }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
             catch (Exception exception)
             {
                 return Result.Fail<Classes.Comments.MediaInfo>(exception);
@@ -155,6 +163,10 @@ namespace InstagramApiSharp.WebApi
 
                 return await api.GetUserFriendshipsByIdAsync(user.Value.Pk, status, countPerPage, parameters, token,
                     query);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch (Exception exception)
             {
@@ -225,6 +237,10 @@ namespace InstagramApiSharp.WebApi
 
                 return Result.Success(list);
             }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
             catch (HttpRequestException httpException)
             {
                 return Result.Fail(httpException, default(InstaUserShortList), ResponseType.NetworkProblem);
@@ -293,6 +309,10 @@ namespace InstagramApiSharp.WebApi
                     (InstaSectionMedia) medias.GetType().GetMethod("Convert")?.Invoke(medias, null);
                 return Result.Success(media);
             }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
             catch (HttpRequestException httpException)
             {
                 return Result.Fail(httpException, default(InstaSectionMedia), ResponseType.NetworkProblem);
@@ -360,6 +380,10 @@ namespace InstagramApiSharp.WebApi
                 InstaSectionMedia media =
                     (InstaSectionMedia) medias.GetType().GetMethod("Convert")?.Invoke(medias, null);
                 return Result.Success(media);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch (HttpRequestException httpException)
             {
